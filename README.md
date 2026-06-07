@@ -1,1 +1,1 @@
-# TUNS Weapons is GMOD weapons mod from me
+# TUNS Weapons is GMOD weapons mod by me
