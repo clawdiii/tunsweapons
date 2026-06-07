@@ -4,7 +4,7 @@
 - Is frequently updated
 - Big updates
 
-**Install the mod ONLY from here. Steam version not exist.**
+**Install the mod ONLY from here. Steam version not exist. If you see TUNS Weapons steam workshop addon, THIS IS NOT OFFICIAL!**
 
 # How to install
 1. Download source code from releases.
