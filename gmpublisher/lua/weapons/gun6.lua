@@ -1,4 +1,4 @@
-// Бластер-автомат на базе gun1.lua
+-- Бластер-автомат на базе gun1.lua
 
 SWEP.PrintName = "BL-900 Blaster"
 SWEP.Author = "GPT"
