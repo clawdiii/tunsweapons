@@ -82,7 +82,7 @@ function SWEP:PrimaryAttack()
                 timer.Simple(0, function()
                     if not IsValid(ent) then return end
                     if ent:Health() <= 0 then
-                        if IsValid(attacker) and attacker:IsPlayer() and attacker == self.Owner then
+                        if IsValid(self) and IsValid(attacker) and attacker:IsPlayer() and attacker == self:GetOwner() then
                             net.Start("tuns_gun9_killshake")
                             net.Send(attacker)
                         end

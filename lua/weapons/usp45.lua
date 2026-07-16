@@ -41,7 +41,7 @@ SWEP.UseHands = true
 
 SWEP.IronSightPos = Vector(-2.4, -2, 1.2)
 SWEP.IronSightAng = Angle(0, -5, 0)
-SWEP.IronZoom = 0.65
+SWEP.IronZoom = 55
 
 function SWEP:Initialize()
     self:SetHoldType("pistol")

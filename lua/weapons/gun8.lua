@@ -52,7 +52,7 @@ function SWEP:PrimaryAttack()
 
     -- Убиваем игрока через небольшую задержку, чтобы был эффект полета
     timer.Simple(0.70, function()
-        if IsValid(ply) and ply:Alive() then
+        if IsValid(self) and IsValid(ply) and ply:Alive() then
             local dmginfo = DamageInfo()
             dmginfo:SetAttacker(ply)
             dmginfo:SetInflictor(self)

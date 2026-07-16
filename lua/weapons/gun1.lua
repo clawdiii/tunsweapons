@@ -72,6 +72,9 @@ end
 function SWEP:PrimaryAttack()
     if (not self:CanPrimaryAttack()) then return end
 
+    local owner = self:GetOwner()
+    if not IsValid(owner) then return end
+
     -- Увеличиваем разброс при каждом выстреле (учитываем максимум с учетом приседания)
     local maxSpread = self:GetModifiedMaxSpread()
     self.CurrentSpread = math.min(
@@ -84,8 +87,8 @@ function SWEP:PrimaryAttack()
     self:ShootBullet(self.Primary.Damage, self.Primary.NumShots, self:GetModifiedSpread())
     self:TakePrimaryAmmo(1)
 
-    -- Убираем отдачу (экран не подымается)
-    -- self.Owner:ViewPunch(Angle(-self.Primary.Recoil, 0, 0))
+    owner:ViewPunch(Angle(-self.Primary.Recoil, 0, 0))
+
     self:SetNextPrimaryFire(CurTime() + self.Primary.Delay)
 end
 
@@ -103,10 +106,13 @@ function SWEP:Think()
 end
 
 function SWEP:ShootBullet(damage, num_bullets, aimcone)
+    local owner = self:GetOwner()
+    if not IsValid(owner) then return end
+
     local bullet = {}
     bullet.Num = num_bullets
-    bullet.Src = self.Owner:GetShootPos()
-    bullet.Dir = self.Owner:GetAimVector()
+    bullet.Src = owner:GetShootPos()
+    bullet.Dir = owner:GetAimVector()
     bullet.Spread = Vector(aimcone, aimcone, 0)
     bullet.Tracer = 1
     bullet.TracerName = "Tracer"
@@ -114,7 +120,7 @@ function SWEP:ShootBullet(damage, num_bullets, aimcone)
     bullet.Damage = damage
     bullet.AmmoType = self.Primary.Ammo
 
-    self.Owner:FireBullets(bullet)
+    owner:FireBullets(bullet)
     self:ShootEffects()
 end
 

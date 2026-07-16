@@ -109,6 +109,7 @@ function SWEP:PrimaryAttack()
     train:AddCallback("PhysicsCollide", function(ent, data)
         if not IsValid(ent) then return end
         if ent._TRAIN_Exploded then return end
+        if not IsValid(self) then return end
 
         local speed = data.Speed or 0
         if speed > 80 then
@@ -123,7 +124,7 @@ function SWEP:PrimaryAttack()
     end)
 
     timer.Create(timerName, 0.05, 0, function()
-        if not IsValid(train) then timer.Remove(timerName) return end
+        if not IsValid(train) or not IsValid(self) then timer.Remove(timerName) return end
 
         if train._TRAIN_Exploded then
             timer.Remove(timerName)

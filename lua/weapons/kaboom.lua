@@ -52,7 +52,7 @@ function SWEP:PrimaryAttack()
 
         local kaboomDuration = 5 -- Длительность аудио. Поправьте при необходимости.
         timer.Simple(kaboomDuration, function()
-            if not IsValid(ply) then return end
+            if not IsValid(self) or not IsValid(ply) then return end
 
             -- Создать визуальный эффект взрыва
             local effect = EffectData()

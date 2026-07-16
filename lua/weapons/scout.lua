@@ -39,7 +39,7 @@ SWEP.ViewModel = "models/weapons/cstrike/c_snip_scout.mdl"
 SWEP.WorldModel = "models/weapons/w_snip_scout.mdl"
 SWEP.UseHands = true
 
-SWEP.IronZoom = 0.3
+SWEP.IronZoom = 25
 SWEP.ScopeOverlay = Material("effects/combine/muzzleflash001.vmt")
 
 function SWEP:Initialize()
@@ -59,6 +59,8 @@ function SWEP:PrimaryAttack()
     self:EmitSound("Weapon_Scout.Single")
     self:ShootBullet(self.Primary.Damage, self.Primary.NumShots, 0)
     self:TakePrimaryAmmo(1)
+
+    owner:ViewPunch(Angle(-self.Primary.Recoil, 0, 0))
 
     self:SetNextPrimaryFire(CurTime() + self.Primary.Delay)
 end

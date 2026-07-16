@@ -70,6 +70,9 @@ end
 function SWEP:PrimaryAttack()
     if (not self:CanPrimaryAttack()) then return end
 
+    local owner = self:GetOwner()
+    if not IsValid(owner) then return end
+
     -- Увеличиваем разброс при каждом выстреле (учитываем максимум с учетом приседания)
     local maxSpread = self:GetModifiedMaxSpread()
     self.CurrentSpread = math.min(
@@ -82,8 +85,8 @@ function SWEP:PrimaryAttack()
     self:ShootBullet(self.Primary.Damage, self.Primary.NumShots, self:GetModifiedSpread())
     self:TakePrimaryAmmo(1)
 
-    -- Сильнее трясём экран (отдача выше)
-    -- self.Owner:ViewPunch(Angle(-self.Primary.Recoil, 0, 0))
+    owner:ViewPunch(Angle(-self.Primary.Recoil, 0, 0))
+
     self:SetNextPrimaryFire(CurTime() + self.Primary.Delay)
 end
 
@@ -101,10 +104,13 @@ function SWEP:Think()
 end
 
 function SWEP:ShootBullet(damage, num_bullets, aimcone)
+    local owner = self:GetOwner()
+    if not IsValid(owner) then return end
+
     local bullet = {}
     bullet.Num = num_bullets
-    bullet.Src = self.Owner:GetShootPos()
-    bullet.Dir = self.Owner:GetAimVector()
+    bullet.Src = owner:GetShootPos()
+    bullet.Dir = owner:GetAimVector()
     bullet.Spread = Vector(aimcone, aimcone, 0)
     bullet.Tracer = 1
     bullet.TracerName = "Tracer"
@@ -112,7 +118,7 @@ function SWEP:ShootBullet(damage, num_bullets, aimcone)
     bullet.Damage = damage
     bullet.AmmoType = self.Primary.Ammo
 
-    self.Owner:FireBullets(bullet)
+    owner:FireBullets(bullet)
     self:ShootEffects()
 end
 
@@ -124,14 +130,17 @@ function SWEP:Reload()
     if owner:GetAmmoCount(self.Primary.Ammo) <= 0 then return end
 
     self.Reloading = true
+    self:SetNextPrimaryFire(CurTime() + 0.5)
+    self:SetNextSecondaryFire(CurTime() + 0.5)
     self:InsertShell()
 end
 
 function SWEP:InsertShell()
-    if not IsValid(self) then self.Reloading = false return end
     local owner = self:GetOwner()
-    if not IsValid(owner) then self.Reloading = false return end
-    if not self.Reloading then return end
+    if not IsValid(self) or not IsValid(owner) or not self.Reloading then
+        self:FinishReload()
+        return
+    end
     if self:Clip1() >= self.Primary.ClipSize or owner:GetAmmoCount(self.Primary.Ammo) <= 0 then
         self:FinishReload()
         return
@@ -147,12 +156,14 @@ function SWEP:InsertShell()
 
     timer.Simple(delay, function()
         if not IsValid(self) or not IsValid(owner) or not self.Reloading then
-            if IsValid(self) then self:FinishReload() end
+            self:FinishReload()
             return
         end
 
-        self:SetClip1(self:Clip1() + 1)
-        owner:RemoveAmmo(1, self.Primary.Ammo)
+        if SERVER then
+            self:SetClip1(self:Clip1() + 1)
+            owner:RemoveAmmo(1, self.Primary.Ammo)
+        end
 
         if self:Clip1() < self.Primary.ClipSize and owner:GetAmmoCount(self.Primary.Ammo) > 0 then
             self:InsertShell()
@@ -163,10 +174,17 @@ function SWEP:InsertShell()
 end
 
 function SWEP:FinishReload()
-    if IsValid(self) then
-        self.Reloading = false
-        self:SendWeaponAnim(ACT_VM_IDLE)
-    end
+    if not IsValid(self) then return end
+    self.Reloading = false
+    self:SendWeaponAnim(ACT_VM_IDLE)
+    self:SetNextPrimaryFire(CurTime() + 0.2)
+    self:SetNextSecondaryFire(CurTime() + 0.2)
+end
+
+-- Сбрасываем флаг перезарядки при доставании (исправляет "застрявшую" перезарядку)
+function SWEP:Deploy()
+    self.Reloading = false
+    return true
 end
 
 function SWEP:CanPrimaryAttack()

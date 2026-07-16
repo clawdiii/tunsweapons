@@ -71,7 +71,7 @@ function SWEP:PrimaryAttack()
         rocket:SetSaveValue("m_DmgRadius", radius)
 
         timer.Simple(0.1, function()
-            if IsValid(rocket) then
+            if IsValid(self) and IsValid(rocket) then
                 rocket:SetSaveValue("m_flDamage", self.Primary.Damage)
                 rocket:SetSaveValue("m_DmgRadius", radius)
             end

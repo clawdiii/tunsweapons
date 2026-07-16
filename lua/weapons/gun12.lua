@@ -86,6 +86,12 @@ function SWEP:PrimaryAttack()
 
     self:ShootEffects()
     self:TakePrimaryAmmo(1)
+
+    local owner = self:GetOwner()
+    if IsValid(owner) then
+        owner:ViewPunch(Angle(-self.Primary.Recoil, 0, 0))
+    end
+
     self:SetNextPrimaryFire(CurTime() + self.Primary.Delay)
 end
 
