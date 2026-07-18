@@ -35,17 +35,20 @@ SWEP.OrbitHeight = 40    -- высота над ногами
 SWEP.OrbitSpeed = 2      -- скорость вращения (рад/сек)
 SWEP.SeekRange = 3000    -- дальность поиска цели
 SWEP.Damage = 9999       -- ваншот
+SWEP.ProximityRange = 100 -- дистанция ближнего взрыва
 
 -- Режимы (переключение на R). ponytail: knobs, крути под геймплей
 SWEP.Modes = {
     -- ПВО: только воздух, скорострел + ультра точность (самонаведение на цель)
-    { name = "ПВО",        cooldown = 0.1, speed = 4500, airOnly = true,  homing = true },
-    { name = "Обычный",    cooldown = 0.4, speed = 3000, airOnly = false },
-    { name = "Скорострел", cooldown = 0.1, speed = 3500, airOnly = false },
+    { name = "ПВО",           cooldown = 0.1, speed = 4500, airOnly = true,  homing = true },
+    { name = "Обычный",       cooldown = 0.4, speed = 3000, airOnly = false },
+    { name = "Скорострел",    cooldown = 0.1, speed = 3500, airOnly = false },
+    { name = "Скорострел Max", cooldown = 0.1, speed = 3500, airOnly = false, homing = true },
 }
 SWEP.DefaultMode = 2     -- стартуем с «Обычный»
 
 local CHAIR_MODEL = "models/props_c17/FurnitureChair001a.mdl"
+local BARREL_MODEL = "models/props_c17/oildrum001_explosive.mdl"
 
 -- Цель в воздухе? (нет земли/брашей под ней) — для режима ПВО
 local function IsAirborne(e)
@@ -101,15 +104,20 @@ function SWEP:CurMode()
 end
 
 if SERVER then
+    local AuraPropEnts = {} -- таблица пропов Aura для защиты владельца
     -- Создать один орбитальный стул
     function SWEP:SpawnOrbitChair()
         local ent = ents.Create("prop_physics")
         if not IsValid(ent) then return nil end
-        ent:SetModel(CHAIR_MODEL)
+        local propIdx = self:GetNWInt("AuraPropModel", 0)
+        ent:SetModel(propIdx == 1 and BARREL_MODEL or CHAIR_MODEL)
         ent:Spawn()
         ent:SetOwner(self:GetOwner())
         ent:SetCollisionGroup(COLLISION_GROUP_DEBRIS) -- орбита не бьёт игроков
         ent:SetSolid(SOLID_NONE)            -- без коллизий: не толкается о стены/игроков, не ломается при движении
+        ent:SetRenderMode(RENDERMODE_TRANSALPHA)
+        ent:SetColor(Color(255, 255, 255, 30)) -- полупрозрачный — не мешает обзору
+        ent:SetHealth(999999)                -- неуязвим для взрывов на орбите
         local phys = ent:GetPhysicsObject()
         if IsValid(phys) then
             phys:EnableGravity(false)
@@ -141,12 +149,14 @@ if SERVER then
             if e ~= ply and IsTarget(e) and (not airOnly or IsAirborne(e)) then
                 local d = e:WorldSpaceCenter():DistToSqr(src)
                 if d < bestDist then
-                    local tr = util.TraceLine({
+                    -- В упоре (< 120 ед.) проверка LOS не нужна — цель точно видна
+                    if d < 120 * 120 or not util.TraceLine({
                         start = src,
                         endpos = e:WorldSpaceCenter(),
                         filter = { ply, e, unpack(self.Chairs or {}) },
-                    })
-                    if not tr.Hit then best, bestDist = e, d end
+                    }).Hit then
+                        best, bestDist = e, d
+                    end
                 end
             end
         end
@@ -162,6 +172,10 @@ if SERVER then
         local ply = self:GetOwner()
         chair:SetCollisionGroup(COLLISION_GROUP_NONE)
         chair:SetSolid(SOLID_VPHYSICS)      -- включаем коллизии обратно для полёта
+        chair:SetRenderMode(RENDERMODE_NORMAL)  -- возвращаем видимость
+        chair:SetColor(Color(255, 255, 255, 255))
+        chair:SetHealth(999999)             -- неуязвим для взрывов других бочек в полёте
+        AuraPropEnts[chair:EntIndex()] = true
         local phys = chair:GetPhysicsObject()
         if IsValid(phys) then
             phys:EnableMotion(true)
@@ -189,22 +203,45 @@ if SERVER then
         local swep = self
         chair:AddCallback("PhysicsCollide", function(c, data)
             local hitEnt = data.HitEntity
-            if IsTarget(hitEnt) then
+            local isBarrel = swep:GetNWInt("AuraPropModel", 0) == 1
+
+            if IsTarget(hitEnt) and hitEnt ~= ply then
                 local dmg = DamageInfo()
                 dmg:SetAttacker(IsValid(ply) and ply or c)
                 dmg:SetInflictor(c)
                 dmg:SetDamage(swep.Damage)
                 dmg:SetDamageType(DMG_CRUSH)
                 hitEnt:TakeDamageInfo(dmg)
+            end
+
+            -- Barrel — взрыв при любом столкновении (кроме владельца)
+            if isBarrel and hitEnt ~= ply then
+                local exp = ents.Create("env_explosion")
+                if IsValid(exp) then
+                    exp:SetPos(c:GetPos())
+                    exp:SetOwner(ply)
+                    exp:Spawn()
+                    exp:SetKeyValue("iMagnitude", "150")
+                    exp:Fire("Explode", 0, 0)
+                    exp:Remove()
+                end
+                util.BlastDamage(IsValid(ply) and ply or c, c, c:GetPos(), 256, 200)
+                c:EmitSound("weapons/explode/explode_explosion_short.wav", 100, 100)
+            elseif not isBarrel then
                 c:EmitSound("physics/wood/wood_furniture_break2.wav", 90, 90)
             end
+
             timer.Remove(tname)
+            AuraPropEnts[c:EntIndex()] = nil
             c:Remove()
         end)
 
         timer.Simple(6, function()
             timer.Remove(tname)
-            if IsValid(chair) then chair:Remove() end
+            if IsValid(chair) then
+                AuraPropEnts[chair:EntIndex()] = nil
+                chair:Remove()
+            end
         end)
     end
 
@@ -227,6 +264,35 @@ if SERVER then
             end
         end
 
+        -- Ближний взрыв — враг в упоре (< ProximityRange)
+        self.NextBlast = self.NextBlast or 0
+        if CurTime() >= self.NextBlast then
+            local airOnly = self:CurMode().airOnly
+            for _, e in ipairs(ents.GetAll()) do
+                if e ~= ply and IsTarget(e) and (not airOnly or IsAirborne(e)) then
+                    if e:WorldSpaceCenter():DistToSqr(ply:WorldSpaceCenter()) < self.ProximityRange * self.ProximityRange then
+                        local dmg = DamageInfo()
+                        dmg:SetAttacker(ply)
+                        dmg:SetInflictor(self)
+                        dmg:SetDamage(9999999)
+                        dmg:SetDamageType(DMG_BLAST)
+                        e:TakeDamageInfo(dmg)
+                        local exp = ents.Create("env_explosion")
+                        if IsValid(exp) then
+                            exp:SetPos(e:WorldSpaceCenter())
+                            exp:SetOwner(ply)
+                            exp:Spawn()
+                            exp:SetKeyValue("iMagnitude", "200")
+                            exp:Fire("Explode", 0, 0)
+                            exp:Remove()
+                        end
+                        self.NextBlast = CurTime() + 0.25
+                        break
+                    end
+                end
+            end
+        end
+
         -- Ищем цель и запускаем стул
         self.NextLaunch = self.NextLaunch or 0
         if CurTime() >= self.NextLaunch then
@@ -246,9 +312,42 @@ if SERVER then
         self.Chairs = {}
     end
 
-    function SWEP:Holster() self:CleanupChairs() return true end
-    function SWEP:OnRemove() self:CleanupChairs() end
-    function SWEP:OwnerChanged() self:CleanupChairs() end
+    -- Переключение пропа (стул ↔ взрывная бочка) по клавише T
+    function SWEP:ToggleProp()
+        local cur = self:GetNWInt("AuraPropModel", 0)
+        local next = (cur + 1) % 2
+        self:SetNWInt("AuraPropModel", next)
+        self:CleanupChairs()
+        local name = next == 0 and "Стул" or "Взрывная бочка"
+        local ply = self:GetOwner()
+        if IsValid(ply) then ply:ChatPrint("[Aura] Проп: " .. name) end
+        self:EmitSound("buttons/button14.wav", 75, 100)
+    end
+
+    function SWEP:Deploy()
+        local ply = self:GetOwner()
+        if IsValid(ply) then ply:GodEnable() end
+        return true
+    end
+
+    function SWEP:Holster()
+        self:CleanupChairs()
+        local ply = self:GetOwner()
+        if IsValid(ply) then ply:GodDisable() end
+        return true
+    end
+
+    function SWEP:OnRemove()
+        self:CleanupChairs()
+        local ply = self:GetOwner()
+        if IsValid(ply) then ply:GodDisable() end
+    end
+
+    function SWEP:OwnerChanged()
+        self:CleanupChairs()
+        local ply = self:GetOwner()
+        if IsValid(ply) then ply:GodDisable() end
+    end
 
     -- Переключение режима на R (с дебаунсом, т.к. Reload зовётся каждый тик удержания)
     function SWEP:Reload()
@@ -262,7 +361,65 @@ if SERVER then
         local ply = self:GetOwner()
         if IsValid(ply) then ply:ChatPrint("[Aura] Режим: " .. self.Modes[idx].name) end
     end
+
+    -- Отражение урона обратно атакующему
+    local auraReflectLock = false
+    hook.Add("EntityTakeDamage", "aura_reflect", function(target, dmg)
+        if not IsValid(target) or not target:IsPlayer() then return end
+        if auraReflectLock then return end -- защита от зеркальной петли
+
+        local wep = target:GetActiveWeapon()
+
+        -- Если игрок держит Aura — отражаем весь урон
+        if IsValid(wep) and wep:GetClass() == "aura" then
+            local attacker = dmg:GetAttacker()
+            if IsValid(attacker) and attacker ~= target then
+                auraReflectLock = true
+                pcall(function()
+                    local reflect = DamageInfo()
+                    reflect:SetAttacker(target)
+                    reflect:SetInflictor(wep)
+                    reflect:SetDamage(dmg:GetDamage())
+                    reflect:SetDamageType(dmg:GetDamageType())
+                    attacker:TakeDamageInfo(reflect)
+                end)
+                auraReflectLock = false
+            end
+            return false -- безусловно блокируем оригинальный урон
+        end
+
+        -- Fallback: блокируем урон от своих пропов и взрывов от них
+        local inf = dmg:GetInflictor()
+        if IsValid(inf) and AuraPropEnts[inf:EntIndex()] and inf:GetOwner() == target then
+            return false
+        end
+        -- env_explosion от своей бочки (inflictor — env_explosion, не в AuraPropEnts)
+        if dmg:GetAttacker() == target and bit.band(dmg:GetDamageType(), DMG_BLAST) ~= 0 then
+            return false
+        end
+    end)
 end
+
+-- Команда переключения пропа (с клиента уходит на сервер)
+concommand.Add("aura_switchprop", function(ply, cmd, args)
+    if not IsValid(ply) or not SERVER then return end
+    local wep = ply:GetActiveWeapon()
+    if IsValid(wep) and wep:GetClass() == "aura" then
+        wep:ToggleProp()
+    end
+end)
 
 function SWEP:PrimaryAttack() end
 function SWEP:SecondaryAttack() end
+
+if CLIENT then
+    -- Отслеживание нажатия N для переключения пропа
+    local aura_nDown = false
+    hook.Add("Think", "aura_switch_prop", function()
+        local nNow = input.IsKeyDown(KEY_N)
+        if nNow and not aura_nDown then
+            RunConsoleCommand("aura_switchprop")
+        end
+        aura_nDown = nNow
+    end)
+end

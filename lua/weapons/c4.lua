@@ -69,12 +69,14 @@ function SWEP:PrimaryAttack()
     -- Дать задержку между попытками
     self:SetNextPrimaryFire(CurTime() + (self.Primary.Delay or 0.5))
 
-    -- Трассируем вперёд
+    -- Трассируем вперёд (с учётом воды)
     local tr = util.TraceLine({
             start = ply:GetShootPos(),
             endpos = ply:GetShootPos() + ply:GetAimVector() * 100,
+            mask = bit.bor(MASK_SOLID, CONTENTS_WATER),
             filter = ply
         })
+        if tr.Contents ~= nil and bit.band(tr.Contents, CONTENTS_WATER) ~= 0 then return end
     if not CanPlantC4OnTrace(tr) then return end
 
     if IsValid(tr.Entity) and (tr.Entity:IsPlayer() or tr.Entity:IsNPC()) then return end
